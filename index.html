@@ -9,7 +9,7 @@
 <!-- Font Awesome -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
 <!-- Monetag / Ad SDK -->
-<script src='//libtl.com/sdk.js' data-zone='10050170' data-sdk='show_10050170'></script>
+<script src="https://libtl.com/sdk.js" data-zone="10050170" data-sdk="show_10050170"></script>
 <style>
 @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
 @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
@@ -107,6 +107,15 @@ const noResultsMessage = document.getElementById('no-results');
 const languageModal = document.getElementById('language-modal');
 let currentLang = 'es';
 let timerDuration = 10;
+
+// Catch unhandled promise rejections (e.g., from third-party SDK network errors)
+window.addEventListener('unhandledrejection', (e)=>{
+    const reason = e && e.reason;
+    if(reason && (reason.message || '').toLowerCase().includes('network')){
+        e.preventDefault();
+        try{ showToast('toast_ad_error'); }catch(_){}
+    }
+});
 
 const translations = {
 es: {
@@ -241,7 +250,6 @@ filesGrid.addEventListener('click', e=>{
     }
 
     btn.disabled=true;
-    // Start live countdown while verifying
     let remaining = timerDuration;
     const btnLabelEl = btn.querySelector('span');
     btnLabelEl.textContent = getText('verifying_button',{countdown:remaining});
@@ -254,8 +262,29 @@ filesGrid.addEventListener('click', e=>{
     }, 1000);
 
     try{
-        show_10050170({
+        if(!navigator.onLine){
+            clearInterval(countdownInterval);
+            btn.disabled=false;
+            showToast('toast_ad_error');
+            return;
+        }
+        if(typeof show_10050170 !== 'function'){
+            clearInterval(countdownInterval);
+            btn.disabled=false;
+            showToast('toast_ad_error');
+            return;
+        }
+        let settled = false;
+        const safetyTimeout = setTimeout(()=>{
+            if(!settled){
+                clearInterval(countdownInterval);
+                btn.disabled=false;
+                showToast('toast_ad_error');
+            }
+        }, Math.max(8000, timerDuration*1000));
+        Promise.resolve(show_10050170({
             onClose:()=>{
+                settled = true; clearTimeout(safetyTimeout);
                 clearInterval(countdownInterval);
                 adCount++;
                 localStorage.setItem(`adCount_${fileId}`,adCount);
@@ -265,10 +294,16 @@ filesGrid.addEventListener('click', e=>{
                 else showToast('toast_progress',{adCount,requiredCount});
             },
             onError:()=>{
+                settled = true; clearTimeout(safetyTimeout);
                 clearInterval(countdownInterval);
                 btn.disabled=false;
                 showToast('toast_ad_error');
             }
+        })).catch(()=>{
+            settled = true; clearTimeout(safetyTimeout);
+            clearInterval(countdownInterval);
+            btn.disabled=false;
+            showToast('toast_ad_error');
         });
     }catch(err){
         console.error(err);
