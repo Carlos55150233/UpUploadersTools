@@ -282,29 +282,42 @@ filesGrid.addEventListener('click', e=>{
                 showToast('toast_ad_error');
             }
         }, Math.max(8000, timerDuration*1000));
-        Promise.resolve(show_10050170({
-            onClose:()=>{
-                settled = true; clearTimeout(safetyTimeout);
-                clearInterval(countdownInterval);
-                adCount++;
-                localStorage.setItem(`adCount_${fileId}`,adCount);
-                updateButtonState(btn);
-                btn.disabled=false;
-                if(adCount>=requiredCount) showToast('toast_unlocked');
-                else showToast('toast_progress',{adCount,requiredCount});
-            },
-            onError:()=>{
+
+        const attemptAd = (attemptsLeft)=>{
+            Promise.resolve(show_10050170({
+                onClose:()=>{
+                    settled = true; clearTimeout(safetyTimeout);
+                    clearInterval(countdownInterval);
+                    adCount++;
+                    localStorage.setItem(`adCount_${fileId}`,adCount);
+                    updateButtonState(btn);
+                    btn.disabled=false;
+                    if(adCount>=requiredCount) showToast('toast_unlocked');
+                    else showToast('toast_progress',{adCount,requiredCount});
+                },
+                onError:()=>{
+                    if(attemptsLeft>0 && navigator.onLine){
+                        setTimeout(()=>attemptAd(attemptsLeft-1), 1500);
+                        return;
+                    }
+                    settled = true; clearTimeout(safetyTimeout);
+                    clearInterval(countdownInterval);
+                    btn.disabled=false;
+                    showToast('toast_ad_error');
+                }
+            })).catch(()=>{
+                if(attemptsLeft>0 && navigator.onLine){
+                    setTimeout(()=>attemptAd(attemptsLeft-1), 1500);
+                    return;
+                }
                 settled = true; clearTimeout(safetyTimeout);
                 clearInterval(countdownInterval);
                 btn.disabled=false;
                 showToast('toast_ad_error');
-            }
-        })).catch(()=>{
-            settled = true; clearTimeout(safetyTimeout);
-            clearInterval(countdownInterval);
-            btn.disabled=false;
-            showToast('toast_ad_error');
-        });
+            });
+        };
+
+        attemptAd(1);
     }catch(err){
         console.error(err);
         clearInterval(countdownInterval);
