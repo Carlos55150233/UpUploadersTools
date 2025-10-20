@@ -86,7 +86,7 @@ body::-webkit-scrollbar { display: none; }
 
 <script type="module">
 import { initializeApp } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-app.js";
-import { getFirestore, collection, getDocs, query } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
+import { getFirestore, collection, getDocs, query, getDoc, doc } from "https://www.gstatic.com/firebasejs/10.12.2/firebase-firestore.js";
 
 const firebaseConfig = {
     apiKey: "AIzaSyDcnQLf0jauZZBrQbbU3st-J9_Avk47eD8",
@@ -107,6 +107,39 @@ const noResultsMessage = document.getElementById('no-results');
 const languageModal = document.getElementById('language-modal');
 let currentLang = 'es';
 let timerDuration = 10;
+
+async function loadTimerSetting(){
+    try{
+        const snap = await getDoc(doc(db, "settings", "general"));
+        if(snap.exists()){
+            const val = parseInt(snap.data().timerDuration);
+            if(!Number.isNaN(val) && val >= 0) timerDuration = val;
+        }
+    }catch(_){/* ignore */}
+}
+
+function getCooldownRemaining(fileId){
+    const next = parseInt(localStorage.getItem(`nextAllowed_${fileId}`) || '0');
+    const now = Date.now();
+    return Math.max(0, Math.ceil((next - now)/1000));
+}
+
+function startCooldown(button, seconds){
+    const fileId = button.dataset.id;
+    const btnLabelEl = button.querySelector('span');
+    let remaining = seconds;
+    button.disabled = true;
+    btnLabelEl.textContent = getText('verifying_button',{countdown:remaining});
+    const iv = setInterval(()=>{
+        remaining = Math.max(remaining - 1, 0);
+        btnLabelEl.textContent = getText('verifying_button',{countdown:remaining});
+        if(remaining === 0){
+            clearInterval(iv);
+            button.disabled = false;
+            updateButtonState(button);
+        }
+    }, 1000);
+}
 
 const translations = {
 es: {
@@ -218,9 +251,18 @@ function updateButtonState(button){
         buttonIconEl.className='fas fa-download';
         counterEl.textContent='';
         button.classList.add(...unlockedColors);
+        button.disabled = false;
     }else{
-        buttonTextEl.textContent=getText('unlock_button',{adCount,requiredCount});
-        buttonIconEl.className='fas fa-lock';
+        const remaining = getCooldownRemaining(fileId);
+        if(remaining > 0){
+            buttonTextEl.textContent=getText('verifying_button',{countdown:remaining});
+            buttonIconEl.className='fas fa-hourglass-half';
+            button.disabled = true;
+        }else{
+            buttonTextEl.textContent=getText('unlock_button',{adCount,requiredCount});
+            buttonIconEl.className='fas fa-lock';
+            button.disabled = false;
+        }
         counterEl.textContent=`${adCount}/${requiredCount} Ads`;
         button.classList.add(...lockedColors);
     }
@@ -240,39 +282,32 @@ filesGrid.addEventListener('click', e=>{
         return;
     }
 
-    btn.disabled=true;
-    let remaining = timerDuration;
-    const btnLabelEl = btn.querySelector('span');
-    btnLabelEl.textContent = getText('verifying_button',{countdown:remaining});
-    const countdownInterval = setInterval(()=>{
-        remaining = Math.max(remaining - 1, 0);
-        btnLabelEl.textContent = getText('verifying_button',{countdown:remaining});
-        if(remaining === 0){
-            clearInterval(countdownInterval);
-        }
-    }, 1000);
+    const coolRem = getCooldownRemaining(fileId);
+    if(coolRem > 0){
+        startCooldown(btn, coolRem);
+        return;
+    }
 
     try{
         show_10050170({
             onClose:()=>{
-                clearInterval(countdownInterval);
                 adCount++;
                 localStorage.setItem(`adCount_${fileId}`,adCount);
                 updateButtonState(btn);
-                btn.disabled=false;
                 if(adCount>=requiredCount) showToast('toast_unlocked');
-                else showToast('toast_progress',{adCount,requiredCount});
+                else {
+                    showToast('toast_progress',{adCount,requiredCount});
+                    const next = Date.now() + (timerDuration*1000);
+                    localStorage.setItem(`nextAllowed_${fileId}`, String(next));
+                    startCooldown(btn, timerDuration);
+                }
             },
             onError:()=>{
-                clearInterval(countdownInterval);
-                btn.disabled=false;
                 showToast('toast_ad_error');
             }
         });
     }catch(err){
         console.error(err);
-        clearInterval(countdownInterval);
-        btn.disabled=false;
         showToast('toast_ad_error');
     }
 });
@@ -290,8 +325,9 @@ searchInput.addEventListener('keyup',()=>{
     noResultsMessage.style.display=visible===0?'block':'none';
 });
 
-window.addEventListener('load',()=>{
+window.addEventListener('load', async ()=>{
     const lang=localStorage.getItem('userLanguage')||'es';
+    await loadTimerSetting();
     applyLanguage(lang);
 });
 
