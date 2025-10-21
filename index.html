@@ -139,6 +139,33 @@ async function loadTimerSetting(){
     }catch(_){/* ignore */}
 }
 
+function getAdFn(){
+    if(typeof window !== 'undefined' && typeof window.show_10050170 === 'function') return window.show_10050170;
+    return null;
+}
+
+function ensureAdSdkReady(timeoutMs=7000){
+    return new Promise((resolve)=>{
+        const existing = getAdFn();
+        if(existing){ resolve(existing); return; }
+        let done = false;
+        const finish = (fn)=>{ if(!done){ done = true; resolve(fn||null); } };
+        const check = ()=>{ const fn = getAdFn(); if(fn) finish(fn); };
+        const t = setTimeout(()=>finish(getAdFn()), timeoutMs);
+        const s = document.querySelector("script[src*='libtl.com/sdk.js']");
+        if(s){
+            const iv = setInterval(()=>{ if(getAdFn()){ clearInterval(iv); clearTimeout(t); finish(getAdFn()); } }, 150);
+        } else {
+            const ns = document.createElement('script');
+            ns.src = 'https://libtl.com/sdk.js';
+            ns.dataset.zone = '10050170';
+            ns.dataset.sdk = 'show_10050170';
+            ns.onload = ()=>{ check(); };
+            document.head.appendChild(ns);
+        }
+    });
+}
+
 function getCooldownRemaining(fileId){
     const next = parseInt(localStorage.getItem(`nextAllowed_${fileId}`) || '0');
     const now = Date.now();
@@ -306,7 +333,7 @@ function updateButtonState(button){
     }
 }
 
-filesGrid.addEventListener('click', e=>{
+filesGrid.addEventListener('click', async e=>{
     const btn=e.target.closest('.download-btn');
     if(!btn) return;
     const fileId=btn.dataset.id;
@@ -327,8 +354,12 @@ filesGrid.addEventListener('click', e=>{
     }
 
     try{
-        // Disable button while ad is being shown to prevent double clicks
         btn.disabled = true;
+        const label = btn.querySelector('span');
+        label.textContent = getText('loading_ad');
+        const adFn = await ensureAdSdkReady();
+        if(!adFn){ btn.disabled = false; updateButtonState(btn); showToast('toast_ad_error'); return; }
+        // Disable button while ad is being shown to prevent double clicks
         let settled = false;
         const fallbackMs = Math.max(3000, Math.min(10000, timerDuration*1000));
         const fallback = setTimeout(()=>{
@@ -350,7 +381,7 @@ filesGrid.addEventListener('click', e=>{
             }
         }, fallbackMs);
 
-        Promise.resolve(show_10050170({
+        Promise.resolve(adFn({
             onClose:()=>{
                 if(!settled){
                     settled = true; clearTimeout(fallback);
