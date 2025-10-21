@@ -349,7 +349,11 @@ filesGrid.addEventListener('click', async e=>{
         btn.disabled = true;
         const label = btn.querySelector('span');
         label.textContent = getText('loading_ad');
-        const adFn = getAdFn();
+        let adFn = await ensureAdSdkReady(7000);
+        if(!adFn){
+            // one quick retry
+            adFn = await ensureAdSdkReady(2000);
+        }
         if(!adFn){ btn.disabled = false; updateButtonState(btn); showToast('toast_ad_error'); return; }
         // Disable button while ad is being shown to prevent double clicks
         let settled = false;
