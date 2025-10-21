@@ -127,16 +127,25 @@ function getCooldownRemaining(fileId){
 function startCooldown(button, seconds){
     const fileId = button.dataset.id;
     const btnLabelEl = button.querySelector('span');
+    const counterEl = document.getElementById(`counter-${fileId}`);
     let remaining = seconds;
     button.disabled = true;
     btnLabelEl.textContent = getText('verifying_button',{countdown:remaining});
+    if(button.dataset.cooldown === '1'){ return; }
+    button.dataset.cooldown = '1';
     const iv = setInterval(()=>{
         remaining = Math.max(remaining - 1, 0);
         btnLabelEl.textContent = getText('verifying_button',{countdown:remaining});
+        if(counterEl){
+            const requiredCount=parseInt(button.dataset.requiredAds);
+            let adCount=parseInt(localStorage.getItem(`adCount_${fileId}`)||0);
+            counterEl.textContent = `${adCount}/${requiredCount} Ads · ${remaining}s`;
+        }
         if(remaining === 0){
             clearInterval(iv);
             button.disabled = false;
             updateButtonState(button);
+            delete button.dataset.cooldown;
         }
     }, 1000);
 }
@@ -230,7 +239,10 @@ async function loadUserPageData() {
             </div>
             `;
             filesGrid.appendChild(card);
-            updateButtonState(card.querySelector('.download-btn'));
+            const btn = card.querySelector('.download-btn');
+            updateButtonState(btn);
+            const rem = getCooldownRemaining(file.id);
+            if(rem > 0){ startCooldown(btn, rem); }
         });
     } catch(e){console.error(e);filesGrid.innerHTML=`<p class="col-span-full text-center text-red-500">Error loading files</p>`;}
 }
@@ -329,6 +341,29 @@ window.addEventListener('load', async ()=>{
     const lang=localStorage.getItem('userLanguage')||'es';
     await loadTimerSetting();
     applyLanguage(lang);
+    // Global cooldown ticker to ensure countdown always advances
+    setInterval(()=>{
+        document.querySelectorAll('.download-btn').forEach(btn=>{
+            const fileId = btn.dataset.id;
+            if(!fileId) return;
+            const rem = getCooldownRemaining(fileId);
+            const counterEl = document.getElementById(`counter-${fileId}`);
+            const requiredCount=parseInt(btn.dataset.requiredAds);
+            let adCount=parseInt(localStorage.getItem(`adCount_${fileId}`)||0);
+            if(rem > 0){
+                btn.disabled = true;
+                const btnLabelEl = btn.querySelector('span');
+                btnLabelEl.textContent = getText('verifying_button',{countdown:rem});
+                if(counterEl){ counterEl.textContent = `${adCount}/${requiredCount} Ads · ${rem}s`; }
+            }else{
+                // Only reset state if not unlocked
+                if(adCount < requiredCount){
+                    btn.disabled = false;
+                }
+                updateButtonState(btn);
+            }
+        });
+    }, 1000);
 });
 
 document.querySelectorAll('.lang-btn').forEach(btn=>{btn.addEventListener('click',()=>applyLanguage(btn.dataset.lang));});
