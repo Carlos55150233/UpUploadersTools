@@ -150,19 +150,11 @@ function ensureAdSdkReady(timeoutMs=7000){
         if(existing){ resolve(existing); return; }
         let done = false;
         const finish = (fn)=>{ if(!done){ done = true; resolve(fn||null); } };
-        const check = ()=>{ const fn = getAdFn(); if(fn) finish(fn); };
         const t = setTimeout(()=>finish(getAdFn()), timeoutMs);
-        const s = document.querySelector("script[src*='libtl.com/sdk.js']");
-        if(s){
-            const iv = setInterval(()=>{ if(getAdFn()){ clearInterval(iv); clearTimeout(t); finish(getAdFn()); } }, 150);
-        } else {
-            const ns = document.createElement('script');
-            ns.src = 'https://libtl.com/sdk.js';
-            ns.dataset.zone = '10050170';
-            ns.dataset.sdk = 'show_10050170';
-            ns.onload = ()=>{ check(); };
-            document.head.appendChild(ns);
-        }
+        const iv = setInterval(()=>{
+            const fn = getAdFn();
+            if(fn){ clearInterval(iv); clearTimeout(t); finish(fn); }
+        }, 150);
     });
 }
 
@@ -357,7 +349,7 @@ filesGrid.addEventListener('click', async e=>{
         btn.disabled = true;
         const label = btn.querySelector('span');
         label.textContent = getText('loading_ad');
-        const adFn = await ensureAdSdkReady();
+        const adFn = getAdFn();
         if(!adFn){ btn.disabled = false; updateButtonState(btn); showToast('toast_ad_error'); return; }
         // Disable button while ad is being shown to prevent double clicks
         let settled = false;
