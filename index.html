@@ -277,8 +277,10 @@ function updateButtonState(button){
             buttonTextEl.textContent=getText('unlock_button',{adCount,requiredCount});
             buttonIconEl.className='fas fa-lock';
             button.disabled = false;
+            if(counterEl){
+                counterEl.textContent=`${adCount}/${requiredCount} Ads`;
+            }
         }
-        counterEl.textContent=`${adCount}/${requiredCount} Ads`;
         button.classList.add(...lockedColors);
     }
 }
@@ -304,25 +306,59 @@ filesGrid.addEventListener('click', e=>{
     }
 
     try{
+        // Disable button while ad is being shown to prevent double clicks
+        btn.disabled = true;
+        let settled = false;
+        const fallbackMs = Math.max(8000, timerDuration*1000);
+        const fallback = setTimeout(()=>{
+            if(settled) return;
+            settled = true;
+            // Assume ad watched as fallback, increment progress and start cooldown
+            adCount++;
+            localStorage.setItem(`adCount_${fileId}`,adCount);
+            if(adCount>=requiredCount){
+                updateButtonState(btn);
+                btn.disabled = false;
+                showToast('toast_unlocked');
+            } else {
+                const next = Date.now() + (timerDuration*1000);
+                localStorage.setItem(`nextAllowed_${fileId}`, String(next));
+                updateButtonState(btn);
+                startCooldown(btn, timerDuration);
+                showToast('toast_progress',{adCount,requiredCount});
+            }
+        }, fallbackMs);
+
         show_10050170({
             onClose:()=>{
-                adCount++;
-                localStorage.setItem(`adCount_${fileId}`,adCount);
-                updateButtonState(btn);
-                if(adCount>=requiredCount) showToast('toast_unlocked');
-                else {
-                    showToast('toast_progress',{adCount,requiredCount});
-                    const next = Date.now() + (timerDuration*1000);
-                    localStorage.setItem(`nextAllowed_${fileId}`, String(next));
-                    startCooldown(btn, timerDuration);
+                if(!settled){
+                    settled = true; clearTimeout(fallback);
+                    adCount++;
+                    localStorage.setItem(`adCount_${fileId}`,adCount);
+                    if(adCount>=requiredCount){
+                        updateButtonState(btn);
+                        btn.disabled = false;
+                        showToast('toast_unlocked');
+                    } else {
+                        const next = Date.now() + (timerDuration*1000);
+                        localStorage.setItem(`nextAllowed_${fileId}`, String(next));
+                        updateButtonState(btn);
+                        startCooldown(btn, timerDuration);
+                        showToast('toast_progress',{adCount,requiredCount});
+                    }
                 }
             },
             onError:()=>{
-                showToast('toast_ad_error');
+                if(!settled){
+                    settled = true; clearTimeout(fallback);
+                    btn.disabled = false;
+                    showToast('toast_ad_error');
+                }
             }
         });
     }catch(err){
         console.error(err);
+        btn.disabled = false;
         showToast('toast_ad_error');
     }
 });
