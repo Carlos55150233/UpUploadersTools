@@ -8,6 +8,18 @@
 <script src="https://cdn.tailwindcss.com"></script>
 <!-- Font Awesome -->
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<!-- Pre-SDK handler to suppress early unhandled promise rejections from network errors -->
+<script>
+  window.addEventListener('unhandledrejection', function(e){
+    try{
+      var r = e && e.reason;
+      var msg = (r && (r.message || r.toString())) || '';
+      if(String(msg).toLowerCase().includes('network')){
+        e.preventDefault();
+      }
+    }catch(_){}
+  });
+</script>
 <!-- Monetag / Ad SDK -->
 <script src='//libtl.com/sdk.js' data-zone='10050170' data-sdk='show_10050170'></script>
 <style>
@@ -318,7 +330,7 @@ filesGrid.addEventListener('click', e=>{
         // Disable button while ad is being shown to prevent double clicks
         btn.disabled = true;
         let settled = false;
-        const fallbackMs = Math.max(8000, timerDuration*1000);
+        const fallbackMs = Math.max(3000, Math.min(10000, timerDuration*1000));
         const fallback = setTimeout(()=>{
             if(settled) return;
             settled = true;
