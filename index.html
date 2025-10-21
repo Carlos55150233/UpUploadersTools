@@ -128,13 +128,13 @@ function startCooldown(button, seconds){
     const fileId = button.dataset.id;
     const btnLabelEl = button.querySelector('span');
     const counterEl = document.getElementById(`counter-${fileId}`);
-    let remaining = seconds;
     button.disabled = true;
-    btnLabelEl.textContent = getText('verifying_button',{countdown:remaining});
+    let remainingInit = Math.max(seconds, getCooldownRemaining(fileId));
+    btnLabelEl.textContent = getText('verifying_button',{countdown:remainingInit});
     if(button.dataset.cooldown === '1'){ return; }
     button.dataset.cooldown = '1';
     const iv = setInterval(()=>{
-        remaining = Math.max(remaining - 1, 0);
+        const remaining = getCooldownRemaining(fileId);
         btnLabelEl.textContent = getText('verifying_button',{countdown:remaining});
         if(counterEl){
             const requiredCount=parseInt(button.dataset.requiredAds);
@@ -270,6 +270,9 @@ function updateButtonState(button){
             buttonTextEl.textContent=getText('verifying_button',{countdown:remaining});
             buttonIconEl.className='fas fa-hourglass-half';
             button.disabled = true;
+            if(counterEl){
+                counterEl.textContent = `${adCount}/${requiredCount} Ads · ${remaining}s`;
+            }
         }else{
             buttonTextEl.textContent=getText('unlock_button',{adCount,requiredCount});
             buttonIconEl.className='fas fa-lock';
