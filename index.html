@@ -108,6 +108,15 @@ const languageModal = document.getElementById('language-modal');
 let currentLang = 'es';
 let timerDuration = 10;
 
+// Catch unhandled promise rejections from third-party SDKs and surface a friendly toast
+window.addEventListener('unhandledrejection', (e)=>{
+    const msg = (e && e.reason && (e.reason.message||e.reason.toString())) || '';
+    if(String(msg).toLowerCase().includes('network')){
+        e.preventDefault();
+        try{ showToast('toast_ad_error'); }catch(_){/* ignore */}
+    }
+});
+
 async function loadTimerSetting(){
     try{
         const snap = await getDoc(doc(db, "settings", "general"));
@@ -329,7 +338,7 @@ filesGrid.addEventListener('click', e=>{
             }
         }, fallbackMs);
 
-        show_10050170({
+        Promise.resolve(show_10050170({
             onClose:()=>{
                 if(!settled){
                     settled = true; clearTimeout(fallback);
@@ -354,6 +363,12 @@ filesGrid.addEventListener('click', e=>{
                     btn.disabled = false;
                     showToast('toast_ad_error');
                 }
+            }
+        })).catch(()=>{
+            if(!settled){
+                settled = true; clearTimeout(fallback);
+                btn.disabled = false;
+                showToast('toast_ad_error');
             }
         });
     }catch(err){
